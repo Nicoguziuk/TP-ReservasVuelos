@@ -7,24 +7,29 @@ defmodule Booking.Protocol do
   No conoce detalles de Cowboy ni de WebSocket.
   """
 
-  alias Booking.{Persistence, User}
+  alias Booking.{Persistence, User, Seed, Flight}
 
   def handle(%{"type" => "register", "name" => name}, context) do
-    user = find_or_create_user(name, context.persistence)
+    user = find_or_create_user(context.persistence, name)
 
-    response = %{
+    {%{
       type: "registered",
       user_id: user.id,
       name: user.name
-    }
-
-    new_context = Map.put(context, :user_id, user.id)
-
-    {response, new_context}
+    }, %{context | user_id: user.id}}
   end
 
-  def handle(%{"type" => "list_flights"}, context) do
-    {%{type: "list_flights_response"}, context}
+  def handle(%{"type" => "list_flights"} = message, context) do
+    airlines = Map.new(Seed.airlines())
+
+    flights = context.persistence
+    |> Persistence.get_flights()
+    |> filter_by_date(message["date"])
+    |> filter_by_destination(message["destination"])
+    |> sort_flights(message["sort"])
+    |> Enum.map(&flight_json(&1, airlines))
+
+    {%{type: "flights", flights: flights}, context}
   end
 
   def handle(%{"type" => "open_flight"}, context) do
@@ -68,4 +73,42 @@ defmodule Booking.Protocol do
         user
     end
   end
+
+  # En el filtro por fecha se compara la fecha de salida del vuelo con la fecha proporcionada en el mensaje.
+  # Si la fecha es nil o una cadena vacía, se devuelve la lista completa de vuelos sin filtrar.
+  defp filter_by_date(flights, date) when date in [nil, ""], do: flights
+
+  defp filter_by_date(flights, date) do
+    Enum.filter(flights, fn flight ->
+      flight.departs_at
+      |> DateTime.to_date()
+      |> Date.to_iso8601() == date
+    end)
+  end
+
+  # En el filtro por destino se compara el destino del vuelo con el destino proporcionado en el mensaje.
+  # Si el destino es nil o una cadena vacía, se devuelve la lista completa de vuelos sin filtrar.
+  defp filter_by_destination(flights, destination) when destination in [nil, ""], do: flights
+  defp filter_by_destination(flights, dest), do: Enum.filter(flights, &(&1.destination == dest))
+
+  # En la función de ordenamiento, se ordenan los vuelos según el criterio proporcionado en el mensaje.
+  # Si el criterio es "price_asc", se ordena por precio de menor a mayor. Si es "price_desc", se ordena por precio de mayor a menor.
+  # Si no se proporciona un criterio válido, se devuelve la lista de vuelos sin ordenar.
+  defp sort_flights(flights, "price_asc"), do: Enum.sort_by(flights, & &1.price, :asc)
+  defp sort_flights(flights, "price_desc"), do: Enum.sort_by(flights, & &1.price, :desc)
+  defp sort_flights(flights, _sort), do: flights
+
+  defp flight_json(%Flight{} = flight, airlines) do
+    %{
+      id: flight.id,
+      airline: Map.get(airlines, flight.airline_id, flight.airline_id),
+      origin: flight.origin,
+      destination: flight.destination,
+      departs_at: iso(flight.departs_at),
+      price: flight.price,
+      seat_count: map_size(flight.seats)
+    }
+  end
+
+  defp iso(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
 end

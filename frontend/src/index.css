@@ -1,0 +1,277 @@
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #2563eb;
+  --primary-d: #1d4ed8;
+
+  --free: #e8f5e9;
+  --free-b: #66bb6a;
+  --reserved: #fff4e0;
+  --reserved-b: #f5a623;
+  --confirmed: #ffe5e5;
+  --confirmed-b: #e05353;
+  --own: #e3f0ff;
+  --own-b: #2563eb;
+
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: var(--primary);
+  color: #fff;
+}
+button:hover {
+  background: var(--primary-d);
+}
+button:disabled {
+  background: #c7cdd6;
+  cursor: not-allowed;
+}
+button.secondary {
+  background: #eef0f3;
+  color: var(--text);
+}
+button.secondary:hover {
+  background: #e2e5ea;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- Registro --- */
+.register {
+  max-width: 360px;
+  margin: 12vh auto;
+  text-align: center;
+}
+.register form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.register input {
+  flex: 1;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* --- Layout --- */
+.app {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 16px;
+}
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+header h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+nav button {
+  background: #eef0f3;
+  color: var(--text);
+}
+nav button.active {
+  background: var(--primary);
+  color: #fff;
+}
+nav .user {
+  margin-left: 8px;
+  color: var(--muted);
+}
+
+.error {
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: var(--confirmed);
+  border: 1px solid var(--confirmed-b);
+  border-radius: 8px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+/* --- Filtros + listado --- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 14px 0;
+}
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.flights {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.flight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.flight-info {
+  flex: 1;
+  line-height: 1.4;
+}
+.price {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* --- Detalle + asientos --- */
+.back {
+  margin-bottom: 8px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 14px 0;
+  font-size: 0.85rem;
+}
+.legend .seat {
+  cursor: default;
+  width: auto;
+  height: auto;
+  padding: 4px 10px;
+}
+.seatgrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+}
+.seat {
+  height: 40px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+.seat.free {
+  background: var(--free);
+  border-color: var(--free-b);
+}
+.seat.reserved {
+  background: var(--reserved);
+  border-color: var(--reserved-b);
+}
+.seat.confirmed {
+  background: var(--confirmed);
+  border-color: var(--confirmed-b);
+}
+.seat.own {
+  background: var(--own);
+  border-color: var(--own-b);
+  font-weight: 700;
+}
+.seat.selected {
+  outline: 3px solid var(--primary);
+  outline-offset: 1px;
+}
+.seat:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+button.reserve {
+  margin-top: 14px;
+}
+
+/* --- Panel de reserva --- */
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.panel.pending {
+  background: var(--reserved);
+  border-color: var(--reserved-b);
+}
+.panel.ok {
+  background: var(--free);
+  border-color: var(--free-b);
+}
+.panel.warn {
+  background: var(--confirmed);
+  border-color: var(--confirmed-b);
+}
+.panel .actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* --- Estados en "Mis reservas" --- */
+.status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.status.pending {
+  background: var(--reserved);
+  color: #8a5a00;
+}
+.status.confirmed {
+  background: var(--free);
+  color: #1b5e20;
+}
+.status.cancelled,
+.status.expired {
+  background: #eceff1;
+  color: var(--muted);
+}

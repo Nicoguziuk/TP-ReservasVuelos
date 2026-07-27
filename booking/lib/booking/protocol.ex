@@ -7,7 +7,7 @@ defmodule Booking.Protocol do
   No conoce detalles de Cowboy ni de WebSocket.
   """
 
-  alias Booking.{Persistence, User, Seed, Flight}
+  alias Booking.{Persistence, User, Seed, Flight, FlightServer, Reservation}
 
   def handle(%{"type" => "register", "name" => name}, context) do
     user = find_or_create_user(context.persistence, name)
@@ -32,40 +32,114 @@ defmodule Booking.Protocol do
     {%{type: "flights", flights: flights}, context}
   end
 
-  def handle(%{"type" => "open_flight"}, context) do
-    {%{type: "open_flight_response"}, context}
+  def handle(%{"type" => "open_flight", "flight_id" => flight_id}, context) do
+    case context.lookup.(flight_id) do
+      {:ok, pid} ->
+        flight = FlightServer.get_flight(pid)
+
+        response = %{
+          type: "flight_detail",
+          flight: flight_summary(flight),
+          seats: seats_json(flight)
+        }
+
+        {response, %{context | flight_id: flight.id}}
+
+      :error ->
+        {error(:flight_not_found), context}
+    end
   end
 
+  # Cancela la suscripción al vuelo abierto (ver docs/protocolo.md). No valida el
+  # `flight_id` recibido contra el del contexto: cerrar siempre es seguro, incluso si
+  # ya estaba cerrado o si el cliente manda un id viejo.
   def handle(%{"type" => "close_flight"}, context) do
-    {%{type: "close_flight_response"}, context}
+    {%{type: "closed"}, %{context | flight_id: nil}}
   end
 
-  def handle(%{"type" => "reserve_seat"}, context) do
-    {%{type: "reserve_seat_response"}, context}
+  def handle(%{"type" => "reserve_seat"} = message, context) do
+    response =
+      require_user(context, fn ->
+        flight_id = message["flight_id"] || context.flight_id
+
+        with_flight(context, flight_id, fn pid ->
+          case FlightServer.reserve_seat(pid, message["seat_id"], context.user_id) do
+            {:ok, reservation} ->
+              %{
+                type: "reservation_started",
+                reservation_id: reservation.id,
+                flight_id: flight_id,
+                seat_id: reservation.seat_id,
+                expires_at: iso(reservation.expires_at)
+              }
+
+            {:error, reason} ->
+              error(reason)
+          end
+        end)
+      end)
+
+    {response, context}
   end
 
-  def handle(%{"type" => "pay"}, context) do
-    {%{type: "pay_received"}, context}
+  def handle(%{"type" => "pay", "reservation_id" => reservation_id}, context) do
+    response =
+      require_user(context, fn ->
+        with_flight(context, flight_of(reservation_id), fn pid ->
+          case FlightServer.pay(pid, reservation_id, context.user_id) do
+            {:ok, :processing} -> %{type: "payment_started", reservation_id: reservation_id}
+            {:error, reason} -> error(reason)
+          end
+        end)
+      end)
+
+    {response, context}
   end
 
-  def handle(%{"type" => "cancel"}, context) do
-    {%{type: "cancel_received"}, context}
+  def handle(%{"type" => "cancel", "reservation_id" => reservation_id}, context) do
+    response =
+      require_user(context, fn ->
+        with_flight(context, flight_of(reservation_id), fn pid ->
+          case FlightServer.cancel(pid, reservation_id, context.user_id) do
+            {:ok, reservation} ->
+              %{
+                type: "reservation_update",
+                reservation_id: reservation.id,
+                status: to_string(reservation.status)
+              }
+
+            {:error, reason} ->
+              error(reason)
+          end
+        end)
+      end)
+
+    {response, context}
   end
 
   def handle(%{"type" => "my_reservations"}, context) do
-    {%{type: "my_reservations_response"}, context}
+    response =
+      require_user(context, fn ->
+        reservations =
+          context.persistence
+          |> Persistence.get_reservations()
+          |> Enum.filter(&(&1.user_id == context.user_id))
+          |> Enum.map(&reservation_json/1)
+
+        %{type: "my_reservations", reservations: reservations}
+      end)
+
+    {response, context}
   end
 
-  def handle(_message, context) do
-    {%{type: "error", reason: "invalid_message"}, context}
-  end
+  def handle(_message, context), do: {error(:invalid_message), context}
 
-  defp find_or_create_user(name, persistence) do
-    users = Persistence.get_users(persistence)
+  # --- Auxiliares ---
 
-    case Enum.find(users, fn user -> user.name == name end) do
+  defp find_or_create_user(persistence, name) do
+    case Enum.find(Persistence.get_users(persistence), &(&1.name == name)) do
       nil ->
-        user = User.new(name)
+        user = %User{id: "user_#{System.unique_integer([:positive])}", name: name}
         :ok = Persistence.put_user(user, persistence)
         user
 
@@ -111,4 +185,45 @@ defmodule Booking.Protocol do
   end
 
   defp iso(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+
+  defp flight_summary(%Flight{} = flight) do
+    flight |> flight_json(Map.new(Seed.airlines())) |> Map.delete(:seat_count)
+  end
+
+  # En la función seats_json, se obtiene la lista de asientos del vuelo y se ordena por el ID del asiento.
+  # Luego, se mapea cada asiento a un mapa que contiene el ID del asiento y su estado como cadena de texto.
+  defp seats_json(%Flight{} = flight) do
+    flight.seats
+    |> Map.values()
+    |> Enum.sort_by(&String.to_integer(&1.id))
+    |> Enum.map(fn seat -> %{id: seat.id, status: to_string(seat.status)} end)
+  end
+
+  defp error(reason), do: %{type: "error", reason: to_string(reason)}
+
+  # Ejecuta `fun` solo si la conexión está registrada; si no, error :not_registered.
+  defp require_user(%{user_id: nil}, _fun), do: error(:not_registered)
+  defp require_user(_context, fun), do: fun.()
+
+  # Resuelve el FlightServer del vuelo y ejecuta `fun.(pid)`; si no existe, :flight_not_found.
+  defp with_flight(ctx, flight_id, fun) do
+    case ctx.lookup.(flight_id) do
+      {:ok, pid} -> fun.(pid)
+      :error -> error(:flight_not_found)
+    end
+  end
+
+  # El reservation_id tiene la forma "<flight_id>-r<n>": el prefijo es el vuelo.
+  defp flight_of(reservation_id), do: reservation_id |> String.split("-r", parts: 2) |> hd()
+
+  defp reservation_json(%Reservation{} = reservation) do
+    %{
+      id: reservation.id,
+      flight_id: reservation.flight_id,
+      seat_id: reservation.seat_id,
+      status: to_string(reservation.status),
+      created_at: iso(reservation.created_at),
+      expires_at: iso(reservation.expires_at)
+    }
+  end
 end

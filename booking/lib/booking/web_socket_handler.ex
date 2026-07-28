@@ -14,7 +14,8 @@ defmodule Booking.WebSocketHandler do
 
   # Request HTTP entrante: le pedimos a Cowboy hacer el upgrade a WebSocket.
   def init(req, _opts) do
-    {:cowboy_websocket, req, nil}
+    websocket_opts = %{idle_timeout: 900_000}
+    {:cowboy_websocket, req, nil, websocket_opts}
   end
 
   # Tras el handshake: armamos el contexto con los módulos reales del dominio.

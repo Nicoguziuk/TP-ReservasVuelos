@@ -10,14 +10,21 @@ export default function FlightDetail({ state, actions }) {
   const hasPending =
     reservation && reservation.status === "pending" && reservation.flight_id === flight.id;
 
-  // Asientos del usuario en este vuelo (pendientes o confirmados) → se marcan "tuyo".
-  const ownSeatIds = new Set(
+  // Asientos del usuario en este vuelo: separamos pendiente ("reservado por vos") de
+  // confirmado ("tuyo") para que el color distinga el estado real de la reserva propia.
+  const ownPendingSeatIds = new Set(
     myReservations
-      .filter((r) => r.flight_id === flight.id && ["pending", "confirmed"].includes(r.status))
+      .filter((r) => r.flight_id === flight.id && r.status === "pending")
       .map((r) => r.seat_id),
   );
-  if (reservation && reservation.flight_id === flight.id && reservation.status === "pending") {
-    ownSeatIds.add(reservation.seat_id);
+  const ownConfirmedSeatIds = new Set(
+    myReservations
+      .filter((r) => r.flight_id === flight.id && r.status === "confirmed")
+      .map((r) => r.seat_id),
+  );
+  if (reservation && reservation.flight_id === flight.id) {
+    if (reservation.status === "pending") ownPendingSeatIds.add(reservation.seat_id);
+    if (reservation.status === "confirmed") ownConfirmedSeatIds.add(reservation.seat_id);
   }
 
   return (
@@ -40,16 +47,21 @@ export default function FlightDetail({ state, actions }) {
       <div className="legend">
         <span className="seat free">Disponible</span>
         <span className="seat reserved">Reservado</span>
-        <span className="seat confirmed">Confirmado</span>
+        <span className="seat confirmed">Ocupado</span>
+        <span className="seat own-pending">Reservado por vos</span>
         <span className="seat own">Tuyo</span>
         <span className="seat selected">Elegido</span>
       </div>
 
       <div className="seatgrid">
         {seats.map((s) => {
-          const own = ownSeatIds.has(s.id);
+          const ownStatus = ownConfirmedSeatIds.has(s.id)
+            ? "own"
+            : ownPendingSeatIds.has(s.id)
+              ? "own-pending"
+              : s.status;
           const isSelected = selectedSeat === s.id;
-          const className = ["seat", own ? "own" : s.status, isSelected ? "selected" : ""]
+          const className = ["seat", ownStatus, isSelected ? "selected" : ""]
             .filter(Boolean)
             .join(" ");
           const clickable = s.status === "free" && !hasPending;

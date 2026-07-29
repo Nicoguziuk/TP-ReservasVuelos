@@ -15,6 +15,8 @@
   --confirmed-b: #e05353;
   --own: #e3f0ff;
   --own-b: #2563eb;
+  --own-pending: #f3e8ff;
+  --own-pending-b: #9333ea;
 
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: var(--text);
@@ -212,6 +214,11 @@ nav .user {
 .seat.own {
   background: var(--own);
   border-color: var(--own-b);
+  font-weight: 700;
+}
+.seat.own-pending {
+  background: var(--own-pending);
+  border-color: var(--own-pending-b);
   font-weight: 700;
 }
 .seat.selected {

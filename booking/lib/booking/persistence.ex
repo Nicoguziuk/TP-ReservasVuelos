@@ -64,7 +64,12 @@ defmodule Booking.Persistence do
 
   @impl true
   def handle_call({:put, kind, id, value}, _from, state) do
-    :ok = :dets.insert(state.tables[kind], {id, value})
+    table = state.tables[kind]
+    :ok = :dets.insert(table, {id, value})
+    # Fuerza el flush a disco en cada escritura: si el proceso muere sin pasar por
+    # terminate/2 (kill duro), DETS no debe perder inserts que solo estaban en su
+    # buffer interno (por default solo sincroniza cada 3 min o al cerrar prolijo).
+    :ok = :dets.sync(table)
     {:reply, :ok, state}
   end
 
